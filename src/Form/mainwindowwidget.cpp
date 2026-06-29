@@ -1049,18 +1049,12 @@ void MainWindowWidget::onHShapeBarButtonToggled(bool checked)
         }
     }
 
-    // 同步到竖向形状栏的按钮（通过模拟点击/setChecked）
+    // 同步到竖向形状栏的按钮（不 blockSignals，让 toggled 信号正常触发互斥组逻辑）
     if (target->isChecked() != checked) {
-        target->blockSignals(true);
         target->setChecked(checked);
-        target->blockSignals(false);
-        // 触发互斥组逻辑
-        if (checked) {
-            onExclusiveMemberToggled(true);
-        }
     }
 
-    // 弹出对应工具的 popup（索引 0-5 对应线/圆/椭圆/弧/面/标注）
+    // 设置绘图模式并弹出对应工具的 popup（索引 0-5 对应线/圆/椭圆/弧/面/标注）
     if (checked && idx <= 5) {
         vBar->triggerToolBodyClick(idx);
         vBar->showPopupNearWidget(idx, btn);
