@@ -1035,7 +1035,7 @@ void ShapeToolBar::triggerToolBodyClick(int toolIndex)
     case 5: // 标注
         if (dimensionPopup) {
             m_DrawData.DimType = static_cast<ToolType>(dimensionPopup->currentDimension());
-            m_DrawData.SelectMode = MODE_DIMENSION;
+            m_DrawData.SelectMode = MODE_MARK;
             emit toolChanged(m_DrawData.DimType);
         }
         break;
