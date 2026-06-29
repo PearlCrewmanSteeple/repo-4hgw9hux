@@ -1059,6 +1059,14 @@ void MainWindowWidget::onHShapeBarButtonToggled(bool checked)
             onExclusiveMemberToggled(true);
         }
     }
+
+    // 弹出对应工具的 popup（索引 0-5 对应线/圆/椭圆/弧/面/标注）
+    if (checked && idx <= 5) {
+        vBar->triggerToolBodyClick(idx);
+        vBar->showPopupNearWidget(idx, btn);
+    } else if (checked && idx == 6) {
+        vBar->triggerToolBodyClick(idx);
+    }
 }
 
 void MainWindowWidget::syncHShapeBarFromVertical()
