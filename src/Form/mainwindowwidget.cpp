@@ -99,7 +99,8 @@ MainWindowWidget::MainWindowWidget(QWidget *parent) :
     m_topBarStack(NULL),
     m_horizontalShapeBar(NULL),
     m_smallScreenActive(false),
-    m_topBarShowingShapeBar(false)
+    m_topBarCurrentPage(0),
+    m_horizontalCraftBar(NULL)
 {
     if (!parent)
         setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
@@ -819,8 +820,8 @@ void MainWindowWidget::initSmallScreenMode()
     // 创建顶部切换容器（初始隐藏）
     m_smallScreenTopBar = new QWidget(this);
     m_smallScreenTopBar->setObjectName(QLatin1String("smallScreenTopBar"));
-    m_smallScreenTopBar->setMinimumHeight(40);
-    m_smallScreenTopBar->setMaximumHeight(50);
+    m_smallScreenTopBar->setMinimumHeight(44);
+    m_smallScreenTopBar->setMaximumHeight(54);
 
     QHBoxLayout* topLay = new QHBoxLayout(m_smallScreenTopBar);
     topLay->setContentsMargins(2, 2, 2, 2);
@@ -828,15 +829,15 @@ void MainWindowWidget::initSmallScreenMode()
 
     // 切换按钮
     m_topBarToggleBtn = new QToolButton(m_smallScreenTopBar);
-    m_topBarToggleBtn->setCheckable(true);
-    m_topBarToggleBtn->setToolTip(QString::fromUtf8("切换文件栏/形状栏"));
-    m_topBarToggleBtn->setText(QString::fromUtf8("形状"));
-    m_topBarToggleBtn->setMinimumSize(50, 36);
+    m_topBarToggleBtn->setCheckable(false);
+    m_topBarToggleBtn->setToolTip(QString::fromUtf8("切换文件栏/形状栏/工艺栏"));
+    m_topBarToggleBtn->setText(QString::fromUtf8("▶形状"));
+    m_topBarToggleBtn->setMinimumSize(60, 36);
     m_topBarToggleBtn->setStyleSheet(
         "QToolButton{padding:4px 8px;border:1px solid #5c8ebf;border-radius:6px;"
         "background:#e0eaf0;color:#213140;font-weight:600;}"
-        "QToolButton:checked{background:#2f73ff;color:#ffffff;border-color:#0d55ff;}"
-        "QToolButton:hover{background:#c5ddf0;}");
+        "QToolButton:hover{background:#c5ddf0;}"
+        "QToolButton:pressed{background:#2f73ff;color:#ffffff;}");
     connect(m_topBarToggleBtn, SIGNAL(clicked()), this, SLOT(onTopBarToggleClicked()));
     topLay->addWidget(m_topBarToggleBtn);
 
@@ -898,9 +899,23 @@ void MainWindowWidget::initSmallScreenMode()
     hBarLay->addStretch();
 
     m_topBarStack->addWidget(m_horizontalShapeBar);
+
+    // Page 2: 横向工艺栏
+    m_horizontalCraftBar = new QWidget(m_topBarStack);
+    m_horizontalCraftBar->setObjectName(QLatin1String("horizontalCraftBar"));
+    m_topBarStack->addWidget(m_horizontalCraftBar);
+    rebuildHorizontalCraftBar();
+
     topLay->addWidget(m_topBarStack);
 
     m_smallScreenTopBar->hide();
+
+    // 连接 CraftToolBar 的 rebuildCraftButtons 完成后刷新横向工艺栏
+    CraftToolBar* craftBar = qobject_cast<CraftToolBar*>(ui->widget_2);
+    if (craftBar) {
+        connect(craftBar, SIGNAL(craftArmChanged(QString)),
+                this, SLOT(onCraftToolBarRebuilt()));
+    }
 
     // 应用启动时的小屏幕设置
     applySmallScreenMode(AppUiSettings::instance().smallScreenMode());
@@ -922,9 +937,8 @@ void MainWindowWidget::applySmallScreenMode(bool enabled)
             m_topBarStack->insertWidget(0, ui->widget_FileControl);
         }
         m_topBarStack->setCurrentIndex(0);
-        m_topBarShowingShapeBar = false;
-        m_topBarToggleBtn->setChecked(false);
-        m_topBarToggleBtn->setText(QString::fromUtf8("形状"));
+        m_topBarCurrentPage = 0;
+        m_topBarToggleBtn->setText(QString::fromUtf8("\u25b6\u5f62\u72b6"));
 
         // 将 m_smallScreenTopBar 插入 splitter_right 的第一个位置
         if (ui->splitter_right) {
@@ -935,6 +949,10 @@ void MainWindowWidget::applySmallScreenMode(bool enabled)
         // 隐藏左侧竖向形状栏面板 (widget_)
         if (ui->widget_) {
             ui->widget_->hide();
+        }
+        // 隐藏右侧竖向工艺栏
+        if (ui->widget_2) {
+            ui->widget_2->hide();
         }
     } else {
         // 恢复 FileControlWidget 到 splitter_right 的第一个位置
@@ -948,6 +966,10 @@ void MainWindowWidget::applySmallScreenMode(bool enabled)
         // 显示左侧竖向形状栏面板
         if (ui->widget_) {
             ui->widget_->show();
+        }
+        // 显示右侧竖向工艺栏
+        if (ui->widget_2) {
+            ui->widget_2->show();
         }
     }
 
@@ -964,16 +986,22 @@ void MainWindowWidget::onTopBarToggleClicked()
     if (!m_topBarStack)
         return;
 
-    m_topBarShowingShapeBar = !m_topBarShowingShapeBar;
+    // 循环切换: 0(文件) -> 1(形状) -> 2(工艺) -> 0(文件)
+    m_topBarCurrentPage = (m_topBarCurrentPage + 1) % 3;
+    m_topBarStack->setCurrentIndex(m_topBarCurrentPage);
 
-    if (m_topBarShowingShapeBar) {
-        m_topBarStack->setCurrentIndex(1);
-        m_topBarToggleBtn->setText(QString::fromUtf8("文件"));
-        m_topBarToggleBtn->setChecked(true);
-    } else {
-        m_topBarStack->setCurrentIndex(0);
-        m_topBarToggleBtn->setText(QString::fromUtf8("形状"));
-        m_topBarToggleBtn->setChecked(false);
+    // 按钮文字显示下一个将切换到的名称
+    switch (m_topBarCurrentPage) {
+    case 0: // 当前是文件栏，下一个是形状栏
+        m_topBarToggleBtn->setText(QString::fromUtf8("\u25b6\u5f62\u72b6"));
+        break;
+    case 1: // 当前是形状栏，下一个是工艺栏
+        m_topBarToggleBtn->setText(QString::fromUtf8("\u25b6\u5de5\u827a"));
+        syncHShapeBarFromVertical();
+        break;
+    case 2: // 当前是工艺栏，下一个是文件栏
+        m_topBarToggleBtn->setText(QString::fromUtf8("\u25b6\u6587\u4ef6"));
+        break;
     }
 }
 
@@ -1060,6 +1088,139 @@ void MainWindowWidget::syncHShapeBarFromVertical()
     for (int i = 0; i < syncCount; ++i) {
         QAbstractButton* hBtn = m_hShapeButtons.at(i);
         QAbstractButton* vBtn = targets[i];
+        if (hBtn && vBtn) {
+            bool vc = vBtn->isChecked();
+            if (hBtn->isChecked() != vc) {
+                hBtn->blockSignals(true);
+                hBtn->setChecked(vc);
+                hBtn->blockSignals(false);
+            }
+        }
+    }
+}
+
+// ===================== 横向工艺栏 =====================
+
+void MainWindowWidget::rebuildHorizontalCraftBar()
+{
+    if (!m_horizontalCraftBar)
+        return;
+
+    // 清除旧按钮
+    m_hCraftButtons.clear();
+    QLayout* oldLay = m_horizontalCraftBar->layout();
+    if (oldLay) {
+        QLayoutItem* item;
+        while ((item = oldLay->takeAt(0)) != NULL) {
+            if (item->widget())
+                delete item->widget();
+            delete item;
+        }
+        delete oldLay;
+    }
+
+    QHBoxLayout* hLay = new QHBoxLayout(m_horizontalCraftBar);
+    hLay->setContentsMargins(2, 2, 2, 2);
+    hLay->setSpacing(4);
+
+    CraftToolBar* craftBar = qobject_cast<CraftToolBar*>(ui->widget_2);
+    if (!craftBar)
+        return;
+
+    // 读取 CraftToolBar 的按钮组
+    QButtonGroup* craftGroup = craftBar->findChild<QButtonGroup*>();
+    if (!craftGroup)
+        return;
+
+    const QString hCraftBtnStyle =
+        "QToolButton{padding:4px 8px;border:1px solid #a8b9cd;border-radius:5px;"
+        "background:#eef3f9;color:#213140;font-weight:600;font-size:11px;min-width:40px;}"
+        "QToolButton:hover{border-color:#e65100;background:#fff3cd;}"
+        "QToolButton:pressed{background:#ffd54f;border-color:#e65100;}"
+        "QToolButton:checked{border:2px solid #e65100;background:#fff3cd;color:#7c2100;}";
+
+    QList<QAbstractButton*> craftButtons = craftGroup->buttons();
+    for (int i = 0; i < craftButtons.size(); ++i) {
+        QAbstractButton* srcBtn = craftButtons.at(i);
+        if (!srcBtn)
+            continue;
+
+        QToolButton* hBtn = new QToolButton(m_horizontalCraftBar);
+        hBtn->setCheckable(true);
+        hBtn->setText(srcBtn->text());
+        hBtn->setToolTip(srcBtn->toolTip());
+        hBtn->setMinimumHeight(32);
+        hBtn->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+        hBtn->setStyleSheet(hCraftBtnStyle);
+        hBtn->setProperty("hCraftIdx", i);
+        hBtn->setChecked(srcBtn->isChecked());
+        connect(hBtn, SIGNAL(toggled(bool)), this, SLOT(onHCraftBarButtonToggled(bool)));
+        hLay->addWidget(hBtn);
+        m_hCraftButtons.append(hBtn);
+    }
+    hLay->addStretch();
+}
+
+void MainWindowWidget::onHCraftBarButtonToggled(bool checked)
+{
+    QToolButton* btn = qobject_cast<QToolButton*>(sender());
+    if (!btn)
+        return;
+
+    int idx = btn->property("hCraftIdx").toInt();
+    CraftToolBar* craftBar = qobject_cast<CraftToolBar*>(ui->widget_2);
+    if (!craftBar)
+        return;
+
+    QButtonGroup* craftGroup = craftBar->findChild<QButtonGroup*>();
+    if (!craftGroup)
+        return;
+
+    QList<QAbstractButton*> craftButtons = craftGroup->buttons();
+    if (idx < 0 || idx >= craftButtons.size())
+        return;
+
+    // 互斥：先取消其它横向工艺按钮
+    if (checked) {
+        for (int i = 0; i < m_hCraftButtons.size(); ++i) {
+            QAbstractButton* o = m_hCraftButtons.at(i);
+            if (o != btn) {
+                o->blockSignals(true);
+                o->setChecked(false);
+                o->blockSignals(false);
+            }
+        }
+    }
+
+    // 同步到竖向工艺栏
+    QAbstractButton* target = craftButtons.at(idx);
+    if (target && target->isChecked() != checked) {
+        // 直接调用 CraftToolBar 的按钮点击逻辑
+        target->setChecked(checked);
+    }
+}
+
+void MainWindowWidget::onCraftToolBarRebuilt()
+{
+    // CraftToolBar 的工艺按钮可能被重建了，同步横向工艺栏状态
+    if (!m_smallScreenActive)
+        return;
+
+    // 同步横向工艺栏的选中状态
+    CraftToolBar* craftBar = qobject_cast<CraftToolBar*>(ui->widget_2);
+    if (!craftBar)
+        return;
+
+    QButtonGroup* craftGroup = craftBar->findChild<QButtonGroup*>();
+    if (!craftGroup)
+        return;
+
+    QList<QAbstractButton*> craftButtons = craftGroup->buttons();
+    const int syncCount = qMin(craftButtons.size(), m_hCraftButtons.size());
+
+    for (int i = 0; i < syncCount; ++i) {
+        QAbstractButton* hBtn = m_hCraftButtons.at(i);
+        QAbstractButton* vBtn = craftButtons.at(i);
         if (hBtn && vBtn) {
             bool vc = vBtn->isChecked();
             if (hBtn->isChecked() != vc) {

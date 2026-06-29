@@ -70,6 +70,8 @@ private slots:
     void onSmallScreenModeChanged(bool enabled);
     void onTopBarToggleClicked();
     void onHShapeBarButtonToggled(bool checked);
+    void onHCraftBarButtonToggled(bool checked);
+    void onCraftToolBarRebuilt();
 
 private:
     // 旋转复制（三点式）：first=旋转基点，second=基准方向点，third=目标方向点
@@ -92,6 +94,7 @@ private:
     void initSmallScreenMode();
     void applySmallScreenMode(bool enabled);
     void syncHShapeBarFromVertical();
+    void rebuildHorizontalCraftBar();
     Ui::MainWindowWidget *ui;
     CanvasController *pCanvasCtl;
     CadDocumentModel *m_docModel;
@@ -117,9 +120,11 @@ private:
     QToolButton* m_topBarToggleBtn;
     QStackedWidget* m_topBarStack;
     QWidget* m_horizontalShapeBar;
+    QWidget* m_horizontalCraftBar;
     QList<QAbstractButton*> m_hShapeButtons;
+    QList<QAbstractButton*> m_hCraftButtons;
     bool m_smallScreenActive;
-    bool m_topBarShowingShapeBar;
+    int m_topBarCurrentPage;  // 0=filebar, 1=shapebar, 2=craftbar
 };
 
 #endif // MAINWINDOWWIDGET_H
